@@ -1,0 +1,301 @@
+---
+title: "ATDPDataScienceFinalProject"
+author: "Akshat Khandelwal"
+date: "2023-07-19"
+output: html_document
+section: SDR0468.2
+GOAL OF PROJECT: "Create a Model to Predict Property Prices in Bristol, Connecticut"
+---
+
+First, I began by ensuring that I was in the correct working directory. Once I made sure of this, I loaded my data into a variable named "housing" (Although I am not only predicting housing prices, I am predicting all property prices). I also created a backup for housing just in case I make edits to housing that I realize later are wrong. My datatset was found on Data.gov, and contains sales of all kinds of property in Connecticut as well as lots of information about those properties, such as their Assessed Values, Sale prices, addresses, etc. 
+
+```{r}
+getwd()
+
+housing <- read.csv("Real_Estate_Sales_2001-2020_GL.csv")
+
+housing_backup <- read.csv("Real_Estate_Sales_2001-2020_GL.csv")
+
+library(ggplot2) # Install ggplot as I will need it later to graph
+
+library(lubridate) # I will be using this library to split up the date into day, month, and year
+
+library(stringr) # I will be using this later to split up the address so that I could get the street name
+
+library(dplyr) # I will be needing this library when I do Exploratory Data Analysis
+
+```
+
+Once I loaded my data, I looked through it. I first just asked R to print it so I could get a basic overview. Next, I used the different dataframe operators to get a good understanding of what the list consisted of. I know it's very massive
+as this data starts from 2000 and 2020, and therefore wanted to make sure I knew what information it contained in depth. 
+
+```{r}
+housing
+
+summary(housing) # Get a summary of the columns in the housing data
+
+str(housing) # understand what type of value is in the columns of the data
+
+head(housing) # view the first 6 rows of the data
+
+tail(housing) # view the last 6 rows of data
+
+dim(housing) # get the dimensions of the dataset
+
+names(housing) # get all of the different columns in the data set
+
+```
+
+When I used tail(housing), I realized that the order of the data is not in year order. I want it to be like this, so I changed it so that it is ordered by newest to oldest listing using Date.Recorded. 
+
+```{r}
+housing1 <- housing[rev(order(as.Date(housing$Date.Recorded, format="%m/%d/%Y"))),] # I was unsure of how to put it in Date order, and so I used my biggest resource - the internet. 
+
+tail(housing1) #ensure that it is in order by checking the last values
+
+head(housing1) # ensure that it is in order by checking the top values
+```
+
+After using head(housing), I noticed that there are two missing values at the top of the sorted list (housing1). I need to remove this, as they could mess up future data analysis. The easy way to do this would have been to simply delete the
+first row, but since the point of the final project is to use what we would use in real life, I want to omit it using another technique. In real life, there could be the case where there are over 1000 rows of empty columns, and a good data 
+scientist would not count them. Instead, I will be replacing each blank row in the Date.Recorded column with NA, and then removing all rows with NA in them. Additionally, I knew that I only wanted my model to predict the price of property in Bristol, Connecticut. Therefore, I edited the dataframe so that it only contains property information from Bristol, Connecticut. 
+
+```{r}
+housing1$Date.Recorded <- replace(housing1$Date.Recorded, housing1$Date.Recorded == "", NA) # replacing all the blank rows with NA
+
+head(housing1) # ensuring the blank rows now have NA
+
+housing2 <- housing1[complete.cases(housing1$Date.Recorded), ] # Removing all of the rows with NA
+
+housing2 <- housing2[housing2$Town == "Bristol", ] #making housing 2 so that it only has the city we are looking at (Bristol)
+
+head(housing2) # Ensuring all the rows with NA were removed
+```
+
+Next, we will complete the rest of the data preprocessing. This is critical so that we know we have accurate and trustable data before we continue with the rest of the project. 
+
+```{r}
+# We already handled the removal of missing values and having the correct data in the previous set, so lets start with identifying outliers
+
+possible_outliers <- c("Assessed.Value", "Sale.Amount") # Create a list of all the columns that may contain outliers. These are the columns that have integers in them according to the str() command
+
+# I decided that I can find outliers using a box plot. The outliers are anything that are outside of the whiskers of the boxplot
+bp <- boxplot(housing2[, possible_outliers],
+        col = c("gold", "gray"),
+        main = "Outlier Detection Boxplots",
+        xlab = "Columns",
+        ylab = "Price",
+        ylim = c(0, 1500000),
+        las = 1)
+
+bp$stats # When I type in ?boxplot and look for the stats function, this is the description: "a matrix, each column contains the extreme of the lower whisker, the lower hinge, the median, the upper hinge and the extreme of the upper whisker for one group/plot." Through this, I know what the whiskers are for the boxplot.
+
+housing3 <- housing2
+housing3 <- housing3[!housing3$Assessed.Value > 229580, ] # Remove outliers above the top whisker of Assessed.Value boxplot
+housing3 <- housing3[!housing3$Sale.Amount > 385000, ] # Remove outliers above top whisker of Sale.Amount boxplot
+
+# Splitting up the date. This is actually a part of Feature Engineering, but I placed it here so that I could use it for EDA. I can also use this when designing my model as it allows me to split up the dates into months and years when I will be training and testing.
+housing3$Date.Recorded <- as.Date(housing3$Date.Recorded, format = "%m/%d/%Y")
+housing3$Year <- year(housing3$Date.Recorded)
+housing3$Month <- month(housing3$Date.Recorded)
+housing3$Day <- day(housing3$Date.Recorded)
+```
+
+Running bp$stats returned: 
+       [,1]   [,2]
+[1,]      0      0
+[2,]  73745 120000
+[3,] 102550 167500
+[4,] 136080 226000
+[5,] 229580 385000
+
+
+
+The above code cleaned up the entire data set and it is now ready to run computations on. Now, I'm moving on to the next step and doing Exploratory Data Analysis. The point of this is to use visualizations and statistical summaries to gain insights and understand the relationships between different variables. When creating this code, it is important to remember the objective of the project, as we want to ensure everything we do is helpful in that objective. 
+```{r}
+summary(housing3) # starting off with a summary so that I understand what I am working with
+
+# Using a histogram to visualize the distribution of "Assessed.Value". After running this, I was able to understand how the assessed values were spread and around what value they primarily were.
+ggplot(housing3, aes(x = Assessed.Value)) +
+  geom_histogram(binwidth = 10000, fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Assessed Value",
+       x = "Assessed Value",
+       y = "Frequency")
+
+# Visualizing the relationship between "Assessed.Value" and "Sale.Amount" using a scatter plot. This scatter plot contained a ton of points, but they were all clumped up in a pretty straight, y=x sort of line. This means these two are correlated with one another. 
+ggplot(housing3, aes(x = Assessed.Value, y = Sale.Amount)) +
+  geom_point(color = "darkorange") +
+  labs(title = "Assessed Value vs. Sale Amount Scatter Plot",
+       x = "Assessed Value",
+       y = "Sale Amount")
+
+# Visualizing the average assessed value for each property type using a bar plot. I found this technique online and thought I might employ it just to see how it works, even if it doesn't really help me. Running this was surprisingly useful, as it provided me with the average assessed values for all the different kinds of properties. I'm a little confused as to how the code works, but I'll ask that in class/through email. 
+avg_assessed_value <- housing3 %>%
+  group_by(Property.Type) %>%
+  summarize(Avg_Assessed_Value = mean(Assessed.Value))
+
+ggplot(avg_assessed_value, aes(x = reorder(Property.Type, -Avg_Assessed_Value), y = Avg_Assessed_Value)) +
+  geom_bar(stat = "identity", fill = "lightgreen", color = "black") +
+  coord_flip() +
+  labs(title = "Average Assessed Value by Property Type",
+       x = "Property Type",
+       y = "Average Assessed Value")
+
+# Visualize the trends in assessed value over time. I already knew how line plots worked and how to code it, but didn't know how to incorporate the month and year in. For that, I used stack overflow. The model for this was probably the coolest so far. You can visually see the major effects 2008 financial crisis and how high the housing prices went. They skyrocketed, and have not come to earlier levels ever since. I could also see the general trends throughout each individual year, knowing which parts of the year the price will go up and which parts it will go down. 
+housing3$Year_Month <- ym(paste(housing3$Year, housing3$Month, sep = "-"))
+
+avg_assessed_value_over_time <- housing3 %>%
+  group_by(Year_Month) %>%
+  summarize(Avg_Assessed_Value_MonthYear = mean(Assessed.Value))
+
+ggplot(avg_assessed_value_over_time, aes(x = Year_Month, y = Avg_Assessed_Value_MonthYear)) +
+  geom_line(color = "lightblue") +
+  labs(title = "Average Assessed Value over Time",
+       x = "Year",
+       y = "Average Assessed Value")
+
+# Calculate the average assessed value for each year to be plotted
+avg_assessed_value_by_year <- housing3 %>%
+  group_by(Year) %>%
+  summarize(Avg_Assessed_Value_Year = mean(Assessed.Value))
+
+ggplot(avg_assessed_value_by_year, aes(x = Year, y = Avg_Assessed_Value_Year)) +
+  geom_line(color = "lightgreen") + # connecting all the points together
+  geom_smooth(method = "lm", se = FALSE, color = "red") + # create a line of best fit
+  labs(title = "Average Assessed Value Over the Years",
+       x = "Year",
+       y = "Average Assessed Value")
+
+# Box plot of Assessed Value vs. Property Type. When I ran this, I noticed that the first boxplot had no label on both the legend and the graph. When I looked through the housing3 Property.Type column, I realized that there are some empty rows. I will remember to remove these rows before I run my model, as they could cause major issues and inconsistency. 
+ggplot(housing3, aes(x = Property.Type, y = Assessed.Value, fill = Property.Type)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Assessed Value by Property Type",
+       x = "Property Type",
+       y = "Assessed Value") +
+    guides(fill=FALSE)
+
+# Calculate the annual percentage change in the average assessed value. After seeing the effects of the economy crash of 2008, I wanted to see the exact effect it had on property. I found a way to do this online and employed it to fit my situation. The results were pretty cool. There was a 50% increase in property value between 2007 and 2008, and it began decreasing again in mainly 2013, as 2011 only decreased by 0.89%. 
+avg_assessed_value_by_year$Annual_Percentage_Change <- (avg_assessed_value_by_year$Avg_Assessed_Value_Year / lag(avg_assessed_value_by_year$Avg_Assessed_Value_Year, 1) - 1) * 100
+avg_assessed_value_by_year
+```
+
+
+That is the end of Exploratory Data Analysis. The graphs gave us tons of useful information on the relationships of the variables we can use that we can incorporate in further steps. The next step is to complete Feature Engineering. This means that you use the dataset to create new "meaningful features". I have already done a lot of Feature Engineering throughout the code thus far, but there are a couple of things that I learned while doing EDA that I have to fix. 
+
+```{r}
+housing3$Assessed.Value <- replace(housing3$Assessed.Value, housing3$Assessed.Value == 0, NA) # replacing all the blank rows in Assessed Value with NA
+
+head(housing3) # ensuring the blank rows now have NA
+
+housing3 <- housing3[complete.cases(housing3$Assessed.Value), ] # Removing all the rows that have NA in Assessed Value
+
+
+housing3$Property.Type <- replace(housing3$Property.Type, housing3$Property.Type == "", NA) # replacing all the blank rows with NA in Property Type
+
+housing3 <- housing3[complete.cases(housing3$Property.Type), ] # Removing all the rows that have NA in Property Type
+
+# Splitting the street up from the address. This will allow me to add street as one of the predictors in my model, making it much more accurate
+housing3$street <- sapply(strsplit(housing3$Address, ",\\s*"), function(x) x[1])
+housing3$street <- gsub("[0-9]", "", housing3$street)
+```
+
+
+The next step is model selection. There isn't any code to do for this section. I just have to look through my different options and select which model/machine learning algorithm would be appropriate "based on the nature of my dataset and analysis goals." Since I am dealing with a regression problem where I aim to predict housing prices, I have narrowed down my choices to a few potential algorithms.
+
+The first algorithm is the one that I believe to be the most appropriate. This is the Multiple Linear Regression. Not only am I most comfortable and experienced with using this sort of regression, it is also the most suitable when using multiple variables (predictors). I have a set of independent variables (assessed value, property type, list year, etc.) that can potentially influence the target variable (housing prices). Multiple Linear Regression also automatically provides the coefficients of the preductors, which can give information on the impact of each independent variable on the dependent variable. Lastly, Multiple Linear Regression checks for multicollinearity, which is when two of the predictors are highly correlated with one another. This is important to my dataset, as certain predictors, such as property type and assessed value, may have some degree of correlation.
+
+Although, there are also other options that I explored as potential models for my machine learning. I found many online (which I assume you will teach in class, but have not taught us yet as of when I am doing this). Of course, there is the Simple Linear Regression, although this obviously would not work. This only works with one predictor and is far too simple for this case. One that I found online is called the Random Forest Regression, which is an "ensemble learning technique" that can work with both integers and strings. It creates decision trees in order to improve predictions and can identify very complex relationships between the different predictorsx. Another option I found was a Gradient Boosting Regression. This is similar to the Random Forest Regression. However, people online say that it is harder to interpret for my case than a Multiple Linear Regression. It makes understanding the contribution of each predictor challenging, which is crucial to our analysis. There was also something called a Support Vector Regression. This is mostly useful when working with "high-dimensional data." This is not what our dataset is, as we have only a few predictors. If we had more predictors, I would definitely pick this kind of regression. The final model is Neural Networks. I have created a Neural Networks before in Python, and know how they work. However, they are far too complex for this project and are very very difficult to build. CNN's also need tons of data to create a strong model, which we do not currently have.
+
+In conclusion, I will be using a Multiple Linear Regression to achieve my goal of Predicting Property Prices in Bristol, Connecticut. 
+
+
+For the next step, we will be Training and Evaluating our model. I found a guide on Google about how to create a good, strong Multiple Linear Regression, so I will be using that and incorporating what I learned in class to make it better. 
+
+EDITS: On my first iteration, I did not add street or Sales.Ratio as one of the predictors in the linear regression. I had also printed the p-values and z-scores for every single predictor so that I could make sure they were all relevant and important. However, the results of these were really bad. And so, I looked through my entire code, attempting to understand how I could improve it. The first thing that I tried to do was I looked at the columns in the housing3 dataset, trying to think of which one's could aid in understanding the final sale price and have an effect on the price. This was the RANDOM SEARCH method we learnt in class, were input different columns to see which one's help the dataset and which ones harm it. This made a major impact. I had earlier had Year rather than List.Year in my model, which I fixed. Through the Exploratory Data Analysis, I learned that the property prices varied greatly throughout the years, especially during the economic crash of 2008. The next thing that I added to the model was the Sales.Ratio. I'm not sure why I didn't have this before, as this would play a key role in how the model understands the relationship between the assessed value and how much the property eventually sold for. When I ran this, I saw a significant improvement in results of the code, but they still were not as good as I wanted them to be. The next thing that I noticed was that in the dataset, the Assessed Value had some rows with 0 in them. This is not possible, as there is no property that could be assessed to have no value (especially in the USA!). Therefore, I removed all rows with 0, further improving the model. There were also a couple of properties in Property.Type that were not labeled, which could be messing up the model. I did the same thing with those, removing them from the dataset, which also helped improve the model. After that, I didn't know what to do. My model had improved, but it was still below 60% accurate. Surprisingly, while I was working out I thought of another idea. I came home and wrote the code to split up the street from the rest of the address. By doing so, I could also tell the model the street that the house was on, which generally plays a massive role in housing prices (ie. if it is near a good school, price is higher). When i first tried adding this to my model, I got an error stating that some of the streets were not found in the training set but were found in the testing set. When I looked into those streets, I realized that they were unique cases, meaning those streets only appeared once in the thousands of rows of data. They were only about 20 streets, and so I removed them from the testing data, knowing they would not have much of an impact. Once I did this and added it into my Multiple Linear Regression, I got to 74% accuracy. I was really happy with this accuracy, and could not think of anything to improve it any further. 
+
+```{r}
+# Split the data into training and testing sets
+set.seed(42)
+train_indices <- sample(1:nrow(housing3), 0.7 * nrow(housing3))  # Use 70% of data for training
+train_data <- housing3[train_indices, ]
+test_data <- housing3[-train_indices, ]
+
+# When I ran the MLR for the first time, I received an error stating that some of the streets that were in the test data were not in the train data. This was because these streets only showed up once in the entire datatset, meaning they would either be in the training dataset or the testing dataset. I researched about what to do in this case, and online it said that if that specific value is unique, then you can just remove it, as it will not aid much in your model. Therefore, I looked the code that they provided on that website and tailored it to my situation, removing the unique values from the two datasets. Another way to do this would have been to remove all unique streets that only  from the entire housing3 dataset. 
+train_streets <- levels(factor(train_data$street))
+test_data <- test_data[test_data$street %in% train_streets, ]
+
+# Model Training
+lm_model <- lm(Sale.Amount ~ Assessed.Value + Property.Type + List.Year + Sales.Ratio + street, data = train_data)
+
+# Running the model on the training set
+train_predictions <- predict(lm_model, train_data)
+train_mae <- mean(abs(train_predictions - train_data$Sale.Amount))
+train_mse <- mean((train_predictions - train_data$Sale.Amount)^2)
+train_rmse <- sqrt(train_mse)
+train_r2 <- summary(lm_model)$r.squared
+
+# Running the model on the testing set
+test_predictions <- predict(lm_model, test_data)
+test_mae <- mean(abs(test_predictions - test_data$Sale.Amount))
+test_mse <- mean((test_predictions - test_data$Sale.Amount)^2)
+test_rmse <- sqrt(test_mse)
+test_r2 <- summary(lm_model)$r.squared
+
+# Print the evaluation metrics
+cat("Training Set Metrics:\n")
+cat("Mean Absolute Error (MAE):", train_mae, "\n")
+cat("Mean Squared Error (MSE):", train_mse, "\n")
+cat("Root Mean Squared Error (RMSE):", train_rmse, "\n")
+cat("R-squared (R2):", train_r2, "\n\n")
+
+cat("Testing Set Metrics:\n")
+cat("Mean Absolute Error (MAE):", test_mae, "\n")
+cat("Mean Squared Error (MSE):", test_mse, "\n")
+cat("Root Mean Squared Error (RMSE):", test_rmse, "\n")
+cat("R-squared (R2):", test_r2, "\n")
+
+# Although the MSE, MAE, and RMSE results may not seem excellent at first, it is important o take into consideration that the dataset sale prices range from a couple thousand to hundreds of thousands and even millions. In such a case, these values are fine, as this error isnt large in this case. 
+```
+
+Running the Model Diagnostics. By doing this, I am confirming that it is accurate and a good model. I used a lot of the guide's ideas to do this as they had good explanations and were pretty simple to understand. This was also part of the online source I found to create a strong Linear Regression. 
+
+```{r}
+
+# Creating a dataframe to store the actual and predicted values
+prediction_df <- data.frame(Actual = test_data$Sale.Amount,
+                            Predicted = test_predictions)
+
+# Scatter plot of actual vs. predicted values. This graph proves the accuracy of my model. Most of my points are clumped up around the line, especially in the middle. This can be seen by how dark the points are, as the more points there are in that area, the darker the points are. 
+ggplot(prediction_df, aes(x = Actual, y = Predicted)) +
+  geom_point(color = "blue", alpha = 0.25, size = 2) +
+  geom_abline(intercept = 0, slope = 1, color = "green") + # This line is where points would be if the actual values equal predicted values (100% accuracy)
+  labs(title = "Actual vs. Predicted Sale Amount",
+       x = "Actual Sale Amount",
+       y = "Predicted Sale Amount")
+
+
+# Calculating residuals 
+prediction_df$Residuals <- prediction_df$Actual - prediction_df$Predicted
+
+# QQ residual plot. This further proves the accuracy of my data, as the data is primarily very close to the y=x line. 
+qqnorm(prediction_df$Residuals)
+qqline(prediction_df$Residuals)
+
+# Density plot of residuals. This has the wanted bell curve shape and also has the peak of the bell curve super close to x=0, which means most of the residuals are close to 0
+ggplot(prediction_df, aes(x = Residuals)) +
+  geom_density(fill = "maroon") +
+  labs(title = "Density Plot of Residuals",
+       x = "Residuals",
+       y = "Density")
+
+# Histogram of residuals. I wanted to get a better understanding of the bell curve, so I decided to create a histogram. This helps me understand which residual value is most common, In this case, it is 0, which is what we want. 
+ggplot(prediction_df, aes(x = Residuals)) +
+  geom_histogram(binwidth = 10000, fill = "skyblue", color = "black") +
+  labs(title = "Histogram of Residuals",
+       x = "Residuals",
+       y = "Frequency")
+```
+
+
+
