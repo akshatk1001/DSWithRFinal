@@ -9,7 +9,7 @@ Purpose: Create a Model to Predict Property Prices in Bristol, Connecticut
 
 **PLEASE READ THIS TO RUN CODE**
 
-This code was created in the RStudio IDE and runs best in RStudio. Before running it, please ensure you have [R](https://cran.r-project.org/bin/windows/base/) (Windows download) and [RStudio](https://posit.co/download/rstudio-desktop/) (Windows download) installed on your machine. 
+This code was created in the RStudio IDE and runs best in RStudio. Before running it, please ensure you have [R](https://cran.r-project.org/bin/windows/base/) (Windows download) and [RStudio](https://posit.co/download/rstudio-desktop/) installed on your machine. 
 
 If using RStudio, please download the data and code file somewhere accessible. For the data, you may use either the Google Drive Link (recommended) or the one from data.gov (not tested). data.gov updates this dataset yearly, and I used the dataset from 2023 to create my project. _Again, it is recommended to use the Google Drive link for the data file._
 
